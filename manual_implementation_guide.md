@@ -3,17 +3,71 @@
 This guide walks you through the manual steps to implement a new feature (e.g., **Inventory**) using PostgreSQL in this NestJS boilerplate. This is useful if you want to understand the underlying architecture or if you need to deviate from the standard scaffolding provided by Hygen.
 
 ## Overview
+
 The boilerplate follows a Clean Architecture approach with three main layers for each feature:
+
 1.  **Domain Layer**: Core business logic and interfaces (POJO/Typescript classes).
 2.  **Infrastructure Layer**: Database-specific implementations (TypeORM entities, Mappers, Repositories).
 3.  **Application Layer**: Entry points (Controllers, Services, DTOs).
 
 ---
 
+## Core Architectural Concepts
+
+To better understand how this boilerplate is structured, here are explanations of the key components:
+
+### 🎯 Domain Layer
+
+The **Domain Layer** is the heart of your application. It contains the core business logic, entities, and rules that define your feature.
+
+- **Purity**: This layer is "pure," meaning it does not depend on external frameworks (like TypeORM or NestJS). It should ideally be plain TypeScript classes.
+- **Business Logic**: Any rules that are specific to your business (e.g., "a user must be 18 to register") belong here.
+- **Decoupling**: By keeping the Domain layer independent, you ensure that your core business logic is easy to test and resistant to changes in external technologies.
+
+### 🏛️ Infrastructure Layer
+
+The **Infrastructure Layer** is responsible for all external concerns. It contains the "how" of the application—how data is stored, how messages are sent, and how external services are called.
+
+- **Purpose**: It isolates the core business logic from technical details like database drivers or specific third-party APIs.
+- **In this project**: It contains `persistence/`, which houses TypeORM entities, Repositories, and Mappers.
+
+### 💾 TypeORM
+
+**TypeORM** is an Object-Relational Mapper (ORM) that runs in Node.js. It allows you to write database queries using TypeScript classes and methods instead of raw SQL.
+
+- **Entities**: You define your database tables as TypeScript classes decorated with `@Entity()`.
+- **Synchronization**: It can automatically synchronize your database schema with your TypeScript models (though we use migrations for better control).
+
+### 🔄 Mapper
+
+A **Mapper** is a design pattern used to decouple different layers of the application.
+
+- **Role**: It converts **Persistence Entities** (TypeORM-specific classes) into **Domain Entities** (pure TypeScript classes), and vice-versa.
+- **Why?**: This ensures that your business logic (Domain) doesn't depend on TypeORM decorators or database-specific structures. If you change your database, you only update the Mapper, and the rest of your app stays the same.
+
+### 📦 Repository
+
+A **Repository** is an abstraction over data access. It provides a collection-like interface (e.g., `save()`, `find()`, `remove()`) for accessing domain objects.
+
+- **Abstraction**: It hides the complexity of database queries. The application layer (Services) calls the Repository without knowing whether the data is coming from PostgreSQL, an external API, or an in-memory cache.
+- **Interface vs. Implementation**: We define a `Repository Interface` (an abstract class) and then provide a specific `Relational Repository` (using TypeORM) or `Document Repository` (using Mongoose) that implements it.
+
+### 🚀 Application Layer
+
+The **Application Layer** acts as the entry point and orchestrator for your feature.
+
+- **Controllers**: Handle incoming HTTP requests, validate input, and return responses.
+- **Services**: Contain the coordination logic. They call the Repository to fetch or save data and apply any necessary business logic from the Domain.
+- **DTOs (Data Transfer Objects)**: Define the shape of data for requests and responses, ensuring that only valid data enters or leaves your application.
+
+---
+
 ## 1. Define the Domain Layer
+
 The domain layer contains the core business entity.
 
 ### Create `src/inventory/domain/inventory.ts`
+
 ```typescript
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -38,10 +92,13 @@ export class Inventory {
 ---
 
 ## 2. Define the Infrastructure Layer (Persistence)
+
 This layer handles the actual database communication using TypeORM.
 
 ### A. Create the TypeORM Entity
+
 `src/inventory/infrastructure/persistence/relational/entities/inventory.entity.ts`
+
 ```typescript
 import {
   Column,
@@ -72,8 +129,10 @@ export class InventoryEntity extends EntityRelationalHelper {
 ```
 
 ### B. Create the Mapper
+
 Mappers ensure that the application logic only works with the Domain Entity, keeping it decoupled from TypeORM.
 `src/inventory/infrastructure/persistence/relational/mappers/inventory.mapper.ts`
+
 ```typescript
 import { Inventory } from 'src/inventory/domain/inventory';
 import { InventoryEntity } from '../entities/inventory.entity';
@@ -102,8 +161,10 @@ export class InventoryMapper {
 ```
 
 ### C. Define the Repository Interface
+
 The interface belongs to the domain (but usually stored near persistence for convenience in this boilerplate).
 `src/inventory/infrastructure/persistence/inventory.repository.ts`
+
 ```typescript
 import { Inventory } from '../domain/inventory';
 import { NullableType } from 'src/utils/types/nullable.type';
@@ -132,7 +193,9 @@ export abstract class InventoryRepository {
 ```
 
 ### D. Implement the Repository (Relational)
+
 `src/inventory/infrastructure/persistence/relational/repositories/inventory.repository.ts`
+
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -175,7 +238,10 @@ export class InventoryRelationalRepository implements InventoryRepository {
     return entity ? InventoryMapper.toDomain(entity) : null;
   }
 
-  async update(id: Inventory['id'], payload: Partial<Inventory>): Promise<Inventory | null> {
+  async update(
+    id: Inventory['id'],
+    payload: Partial<Inventory>,
+  ): Promise<Inventory | null> {
     const entity = await this.repository.findOne({ where: { id: Number(id) } });
     if (!entity) return null;
 
@@ -197,7 +263,9 @@ export class InventoryRelationalRepository implements InventoryRepository {
 ```
 
 ### E. Set up the Persistence Module
+
 `src/inventory/infrastructure/persistence/relational/relational-persistence.module.ts`
+
 ```typescript
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -223,7 +291,9 @@ export class RelationalInventoryPersistenceModule {}
 ## 3. Define the Application Layer (Service and Controller)
 
 ### A. Create DTOs
+
 `src/inventory/dto/create-inventory.dto.ts`
+
 ```typescript
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
@@ -242,7 +312,9 @@ export class CreateInventoryDto {
 ```
 
 ### B. Create the Service
+
 `src/inventory/inventory.service.ts`
+
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { InventoryRepository } from './infrastructure/persistence/inventory.repository';
@@ -259,7 +331,9 @@ export class InventoryService {
   }
 
   findAllWithPagination(paginationOptions: IPaginationOptions) {
-    return this.inventoryRepository.findAllWithPagination({ paginationOptions });
+    return this.inventoryRepository.findAllWithPagination({
+      paginationOptions,
+    });
   }
 
   findOne(id: Inventory['id']) {
@@ -277,7 +351,9 @@ export class InventoryService {
 ```
 
 ### C. Create the Controller
+
 `src/inventory/inventory.controller.ts`
+
 ```typescript
 import {
   Controller,
@@ -335,7 +411,9 @@ export class InventoryController {
 ---
 
 ## 4. Assemble the Module
+
 `src/inventory/inventory.module.ts`
+
 ```typescript
 import { Module } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
@@ -356,10 +434,13 @@ export class InventoryModule {}
 ## 5. Final Registration and Database Update
 
 ### A. Register in `AppModule`
+
 Open `src/app.module.ts` and import `InventoryModule`.
 
 ### B. Generate and Run Migration
+
 Since you manually created the `InventoryEntity`, you must tell the database to create the table.
+
 ```bash
 npm run migration:generate -- src/database/migrations/CreateInventoryTable
 npm run migration:run
