@@ -77,6 +77,15 @@ microservices-root/
     └── inventory.proto
 ```
 
+### 🏗️ Architecture & Persistence within Microservices
+
+You might notice that the folder structure inside each microservice (`product-service` and `inventory-service`) includes `domain/` and `infrastructure/persistence/...`. 
+
+**Each individual microservice strictly follows the Clean Architecture and Repository pattern** detailed in the `manual_implementation_guide.md`. 
+
+- **What stays the same?** Everything from the Service layer downwards is identical. You still have pure TypeScript Domain entities, TypeORM entities, Mappers, and the Abstract Repository pattern. The Service still injects the Repository and uses it to interact with the database.
+- **What is different?** The only difference is at the **Controller layer**. Instead of using `@Get()` or `@Post()` to expose HTTP REST endpoints, the microservice uses `@GrpcMethod()` to handle internal gRPC requests from the API Gateway. This decoupling is the primary benefit of Clean Architecture!
+
 ---
 
 ## 1. Shared Proto Definitions
